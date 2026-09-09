@@ -1,4 +1,6 @@
 const storage = require('./storage');
+const { Telegraf } = require('telegraf');
+const { createGate } = require('./channel-gate');
 
 const KEY = 'cms:bot-config';
 
@@ -15,6 +17,7 @@ const DEFAULTS = {
     direct2: { name: 'Direct 2', emoji: '🎯', description: 'سرویس Direct 2', order: 40, enabled: false, testEnabled: false, purchaseEnabled: false, provider: 'pasarguard-direct2' },
   },
   bot: { brandName: 'VPN Bot', fallbackUsername: '@VPNBot', subscriptionBaseUrl: '', maintenanceMode: false, qrBackground: 'bg.png' },
+  channelGate: { enabled: false, channelUsername: '', message: 'برای استفاده از ربات ابتدا در کانال عضو شوید.', joinButton: '📢 عضویت در کانال', checkButton: '✅ بررسی عضویت' },
   buttons: {
     test: '🎁 دریافت اکانت تست', buy: '🛒 خرید اشتراک', account: '👤 حساب من', support: '🎯 پشتیبانی', autoName: '⚡ نام خودکار',
     copyCard: '📋 کپی شماره کارت', copySubscription: '📋 کپی لینک اشتراک', openSubscription: '🔗 باز کردن لینک اشتراک', renew: '🔄 تمدید اشتراک',
@@ -59,11 +62,36 @@ function normalize(config) {
   out.services.direct2Enabled = out.services.direct2.enabled;
   delete out.services.tunnelEnabled;
   delete out.services.gamingEnabled;
-  out.limits.testLimitPerDay = Math.max(0, Number(out.limits.testLimitPerDay) || 0); out.limits.testTrafficBytes = Math.max(0, Number(out.limits.testTrafficBytes) || 0); out.limits.testDurationDays = Math.max(1, Number(out.limits.testDurationDays) || 1); out.limits.testHwidLimit = Math.max(0, Number(out.limits.testHwidLimit) || 0); out.bot.maintenanceMode = Boolean(out.bot.maintenanceMode); out.bot.brandName = String(out.bot.brandName || 'VPN Bot'); out.bot.fallbackUsername = String(out.bot.fallbackUsername || '@VPNBot'); out.bot.qrBackground = String(out.bot.qrBackground || 'bg.png').split(/[\\/]/).pop() || 'bg.png'; return out;
+  out.limits.testLimitPerDay = Math.max(0, Number(out.limits.testLimitPerDay) || 0); out.limits.testTrafficBytes = Math.max(0, Number(out.limits.testTrafficBytes) || 0); out.limits.testDurationDays = Math.max(1, Number(out.limits.testDurationDays) || 1); out.limits.testHwidLimit = Math.max(0, Number(out.limits.testHwidLimit) || 0); out.bot.maintenanceMode = Boolean(out.bot.maintenanceMode); out.bot.brandName = String(out.bot.brandName || 'VPN Bot'); out.bot.fallbackUsername = String(out.bot.fallbackUsername || '@VPNBot'); out.bot.qrBackground = String(out.bot.qrBackground || 'bg.png').split(/[\\/]/).pop() || 'bg.png';
+  out.channelGate.enabled = Boolean(out.channelGate.enabled);
+  out.channelGate.channelUsername = String(out.channelGate.channelUsername || '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@+/, '');
+  out.channelGate.message = String(out.channelGate.message || DEFAULTS.channelGate.message);
+  out.channelGate.joinButton = String(out.channelGate.joinButton || DEFAULTS.channelGate.joinButton);
+  out.channelGate.checkButton = String(out.channelGate.checkButton || DEFAULTS.channelGate.checkButton);
+  return out;
 }
 async function getConfig() { return normalize(await storage.get(KEY)); }
 async function saveConfig(patch) { const next = normalize(await storage.get(KEY)); const merged = normalize(merge(next, patch || {})); await storage.set(KEY, merged); return merged; }
 async function getSetting(path, fallback) { const config = await getConfig(); const value = String(path || '').split('.').filter(Boolean).reduce((current, key) => current == null ? undefined : current[key], config); return value === undefined ? fallback : value; }
 async function getMessage(key, variables = {}) { const config = await getConfig(); let message = config.messages?.[key]; if (message == null) message = DEFAULTS.messages[key] || ''; return String(message).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, name) => String(variables[name] ?? `{${name}}`)); }
 async function getButton(key, fallback = '') { const config = await getConfig(); return String(config.buttons?.[key] ?? DEFAULTS.buttons[key] ?? fallback); }
+
+if (!Telegraf.prototype.__channelGatePatched) {
+  const originalUse = Telegraf.prototype.use;
+  Telegraf.prototype.use = function (...fns) {
+    if (!this.__channelGateInstalled) {
+      this.__channelGateInstalled = true;
+      const gate = createGate(this, {
+        getConfig,
+        getMessage,
+        isAdmin: (ctx) => String(ctx.from?.id) === String(process.env.ADMIN_ID || ''),
+        log: (event, fields) => console.log(JSON.stringify({ event, ...fields })),
+      });
+      originalUse.call(this, gate);
+    }
+    return originalUse.apply(this, fns);
+  };
+  Telegraf.prototype.__channelGatePatched = true;
+}
+
 module.exports = { KEY, DEFAULTS, getConfig, saveConfig, getSetting, getMessage, getButton, normalize };
