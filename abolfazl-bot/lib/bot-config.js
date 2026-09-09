@@ -14,7 +14,7 @@ const DEFAULTS = {
     direct: { name: 'Direct', emoji: '🎯', description: 'سرویس Direct', order: 30, enabled: false, testEnabled: false, purchaseEnabled: false },
     direct2: { name: 'Direct 2', emoji: '🎯', description: 'سرویس Direct 2', order: 40, enabled: false, testEnabled: false, purchaseEnabled: false, provider: 'pasarguard-direct2' },
   },
-  bot: { subscriptionBaseUrl: '', maintenanceMode: false, qrBackground: 'bg.png' },
+  bot: { brandName: 'VPN Bot', fallbackUsername: '@VPNBot', subscriptionBaseUrl: '', maintenanceMode: false, qrBackground: 'bg.png' },
   buttons: {
     test: '🎁 دریافت اکانت تست', buy: '🛒 خرید اشتراک', account: '👤 حساب من', support: '🎯 پشتیبانی', autoName: '⚡ نام خودکار',
     copyCard: '📋 کپی شماره کارت', copySubscription: '📋 کپی لینک اشتراک', openSubscription: '🔗 باز کردن لینک اشتراک', renew: '🔄 تمدید اشتراک',
@@ -59,7 +59,7 @@ function normalize(config) {
   out.services.direct2Enabled = out.services.direct2.enabled;
   delete out.services.tunnelEnabled;
   delete out.services.gamingEnabled;
-  out.limits.testLimitPerDay = Math.max(0, Number(out.limits.testLimitPerDay) || 0); out.limits.testTrafficBytes = Math.max(0, Number(out.limits.testTrafficBytes) || 0); out.limits.testDurationDays = Math.max(1, Number(out.limits.testDurationDays) || 1); out.limits.testHwidLimit = Math.max(0, Number(out.limits.testHwidLimit) || 0); out.bot.maintenanceMode = Boolean(out.bot.maintenanceMode); out.bot.qrBackground = String(out.bot.qrBackground || 'bg.png').split(/[\\/]/).pop() || 'bg.png'; return out;
+  out.limits.testLimitPerDay = Math.max(0, Number(out.limits.testLimitPerDay) || 0); out.limits.testTrafficBytes = Math.max(0, Number(out.limits.testTrafficBytes) || 0); out.limits.testDurationDays = Math.max(1, Number(out.limits.testDurationDays) || 1); out.limits.testHwidLimit = Math.max(0, Number(out.limits.testHwidLimit) || 0); out.bot.maintenanceMode = Boolean(out.bot.maintenanceMode); out.bot.brandName = String(out.bot.brandName || 'VPN Bot'); out.bot.fallbackUsername = String(out.bot.fallbackUsername || '@VPNBot'); out.bot.qrBackground = String(out.bot.qrBackground || 'bg.png').split(/[\\/]/).pop() || 'bg.png'; return out;
 }
 async function getConfig() { return normalize(await storage.get(KEY)); }
 async function saveConfig(patch) { const next = normalize(await storage.get(KEY)); const merged = normalize(merge(next, patch || {})); await storage.set(KEY, merged); return merged; }
