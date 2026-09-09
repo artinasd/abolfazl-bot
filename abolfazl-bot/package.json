@@ -14,13 +14,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/artinasd/artiqvpnbot.git"
+    "url": "git+https://github.com/artinasd/abolfazl-bot.git"
   },
   "keywords": ["telegram", "vpn", "pasarguard", "vercel"],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/artinasd/artiqvpnbot/issues"
+    "url": "https://github.com/artinasd/abolfazl-bot/issues"
   },
-  "homepage": "https://github.com/artinasd/artiqvpnbot#readme"
+  "homepage": "https://github.com/artinasd/abolfazl-bot#readme"
 }
