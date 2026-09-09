@@ -21,7 +21,7 @@ test('custom username', () => {
 
 test('fallback attribution avoids underscore before @', () => {
   const value = buildUsername({});
-  assert.match(value, /^TG@AtiqVPN_[A-Za-z0-9]{4}$/);
+  assert.match(value, /^TG@VPNBot_[A-Za-z0-9]{4}$/);
   assertAllowed(value);
   assert.equal(isBotUsername(value), true);
 });
