@@ -5,5 +5,43 @@
       "maxDuration": 30,
       "includeFiles": "bg.png"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/admin-cms.js",
+      "destination": "/admin-cms.js"
+    },
+    {
+      "source": "/admin-cms-original.js",
+      "destination": "/admin-cms-original.js"
+    },
+    {
+      "source": "/active-users-cms.js",
+      "destination": "/active-users-cms.js"
+    },
+    {
+      "source": "/direct-cms.js",
+      "destination": "/direct-cms.js"
+    },
+    {
+      "source": "/direct2-cms.js",
+      "destination": "/direct2-cms.js"
+    },
+    {
+      "source": "/reseller-cms.js",
+      "destination": "/reseller-cms.js"
+    },
+    {
+      "source": "/wallet-cms.js",
+      "destination": "/wallet-cms.js"
+    },
+    {
+      "source": "/api/admin/",
+      "destination": "/api/admin.js"
+    },
+    {
+      "source": "/api/admin",
+      "destination": "/api/admin.js"
+    }
+  ]
 }
