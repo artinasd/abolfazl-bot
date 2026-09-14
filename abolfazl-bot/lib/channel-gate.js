@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const { adminMessagingMiddleware } = require('./admin-messaging');
 
 function normalizeUsername(value) {
   const raw = String(value || '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@+/, '');
@@ -17,6 +18,13 @@ function isJoined(member) {
 }
 
 function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
+  const adminMessaging = adminMessagingMiddleware({
+    storage: require('./storage'),
+    isAdmin,
+    telegram: bot.telegram,
+    log,
+  });
+
   async function check(userId, username) {
     const config = await getConfig();
     const gate = config.channelGate || {};
@@ -65,7 +73,8 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
   }
 
   return async function channelGateMiddleware(ctx, next) {
-    if (!ctx.from || isAdmin(ctx)) return next();
+    if (!ctx.from) return next();
+    if (isAdmin(ctx)) return adminMessaging(ctx, next);
 
     const config = await getConfig();
     const gate = config.channelGate || {};
