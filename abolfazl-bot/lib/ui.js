@@ -12,7 +12,7 @@ function buttonStyleForCallback(callbackData) {
 }
 
 function styledButton(button) {
-  if (!button || typeof button !== 'object' || button.url) return button;
+  if (!button || typeof button !== 'object') return button;
   const style = button.style || buttonStyleForCallback(button.callback_data) || 'primary';
   return { ...button, style };
 }
@@ -39,7 +39,10 @@ function decorateReplyOptions(options) {
   if (!options || !options.reply_markup) return options;
   const rm = options.reply_markup;
   if (!Array.isArray(rm.inline_keyboard)) return options;
-  return { ...options, reply_markup: { ...rm, inline_keyboard: withHome(rm.inline_keyboard) } };
+  const rows = rm.inline_keyboard;
+  const isMainMenu = rows.some(row => Array.isArray(row) && row.some(button => ['main_test', 'main_buy', 'main_wallet', 'main_account', 'main_support'].includes(button?.callback_data)));
+  const styledRows = rows.map(row => Array.isArray(row) ? row.map(styledButton) : row);
+  return { ...options, reply_markup: { ...rm, inline_keyboard: isMainMenu ? styledRows : withHome(styledRows) } };
 }
 
 function patchReply() {
