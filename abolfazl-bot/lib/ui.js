@@ -1,4 +1,4 @@
-const { Markup } = require('telegraf');
+const { Markup, Telegraf } = require('telegraf');
 const accountService = require('./account-service');
 const accountUI = require('./account-ui');
 const { serviceButtons } = require('./services');
@@ -45,15 +45,19 @@ function decorateReplyOptions(options) {
   return { ...options, reply_markup: { ...rm, inline_keyboard: isMainMenu ? styledRows : withHome(styledRows) } };
 }
 
-function patchReply() {
-  const proto = require('telegraf').Telegraf.prototype;
-  if (proto.__uiReplyPatched) return;
-  const originalReply = proto.context.reply;
-  proto.context.reply = function(text, extra, ...rest) {
-    return originalReply.call(this, text, decorateReplyOptions(extra), ...rest);
+function decorateContext(ctx) {
+  if (!ctx || ctx.__uiReplyDecorated || typeof ctx.reply !== 'function') return ctx;
+  const originalReply = ctx.reply.bind(ctx);
+  ctx.reply = function(text, extra, ...rest) {
+    return originalReply(text, decorateReplyOptions(extra), ...rest);
   };
-  proto.__uiReplyPatched = true;
+  ctx.__uiReplyDecorated = true;
+  return ctx;
 }
+
+// Kept for compatibility with callers from older versions. Telegraf 4.x does not expose
+// context.reply on Telegraf.prototype, so patching that prototype would crash at startup.
+function patchReply() { return Telegraf.prototype; }
 
 async function handle(ctx, next, { getConfig, getMessage, persistUser }) {
   const start = ctx.message?.text || '';
@@ -99,11 +103,12 @@ async function handle(ctx, next, { getConfig, getMessage, persistUser }) {
 }
 
 function install(bot, deps) {
-  patchReply();
   if (bot.__uiInstalled) return;
   bot.__uiInstalled = true;
-  const originalUse = require('telegraf').Telegraf.prototype.use;
-  originalUse.call(bot, (ctx, next) => handle(ctx, next, deps));
+  bot.use((ctx, next) => {
+    decorateContext(ctx);
+    return handle(ctx, next, deps);
+  });
 }
 
-module.exports = { buttonStyleForCallback, styledButton, homeButton, mainMenuKeyboard, withHome, decorateReplyOptions, patchReply, handle, install };
+module.exports = { buttonStyleForCallback, styledButton, homeButton, mainMenuKeyboard, withHome, decorateReplyOptions, decorateContext, patchReply, handle, install };
