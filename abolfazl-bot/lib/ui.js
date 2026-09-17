@@ -55,54 +55,55 @@ function patchReply() {
   proto.__uiReplyPatched = true;
 }
 
-function install(bot, { getConfig, getMessage, isAdmin, persistUser }) {
+async function handle(ctx, next, { getConfig, getMessage, persistUser }) {
+  const start = ctx.message?.text || '';
+  if (/^\/start(?:@\w+)?(?:\s+.*)?$/.test(start)) {
+    await persistUser(ctx);
+    const config = await getConfig();
+    await ctx.reply(await getMessage('start'), mainMenuKeyboard(config));
+    return;
+  }
+  const data = ctx.callbackQuery?.data || '';
+  if (!['main_home', 'main_test', 'main_buy', 'main_wallet', 'main_account', 'main_support'].includes(data)) return next();
+  await ctx.answerCbQuery().catch(() => {});
+  await persistUser(ctx);
+  if (data === 'main_home') {
+    const config = await getConfig();
+    return ctx.reply(await getMessage('start'), mainMenuKeyboard(config));
+  }
+  if (data === 'main_test' || data === 'main_buy') {
+    const config = await getConfig();
+    const mode = data === 'main_test' ? 'test' : 'buy';
+    const titleKey = mode === 'test' ? 'serviceSelectionTest' : 'serviceSelectionBuy';
+    const prefix = mode === 'test' ? 'service_test_' : 'service_buy_';
+    const buttons = serviceButtons(prefix, config, mode);
+    if (!buttons.length) return ctx.reply(await getMessage('serviceUnavailable'));
+    return ctx.reply(await getMessage(titleKey), Markup.inlineKeyboard(withHome(buttons)));
+  }
+  if (data === 'main_wallet') {
+    const balance = await require('./wallet').getBalance(ctx.from.id);
+    await require('./storage').setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: null, requiredAmount: 0, balance });
+    return ctx.reply(`💰 <b>کیف پول من</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\n\nمبلغی که می‌خواهید کیف پول را شارژ کنید به تومان وارد کنید.`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: withHome([]) } });
+  }
+  if (data === 'main_account') {
+    const subscriptions = await accountService.listSubscriptions(ctx.from.id);
+    const list = subscriptions.map(accountService.summary);
+    if (!list.length) return ctx.reply(await getMessage('accountNoSubscription'));
+    return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: withHome(accountUI.subscriptionKeyboard(list)) } });
+  }
+  if (data === 'main_support') {
+    const config = await getConfig();
+    const username = config.payment?.supportUsername || process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
+    return ctx.reply(await getMessage('support', { support_username: username }));
+  }
+}
+
+function install(bot, deps) {
   patchReply();
   if (bot.__uiInstalled) return;
   bot.__uiInstalled = true;
   const originalUse = require('telegraf').Telegraf.prototype.use;
-  originalUse.call(bot, async (ctx, next) => {
-    if (!ctx.from || isAdmin(ctx)) return next();
-    const start = ctx.message?.text || '';
-    if (/^\/start(?:@\w+)?(?:\s+.*)?$/.test(start)) {
-      await persistUser(ctx);
-      const config = await getConfig();
-      await ctx.reply(await getMessage('start'), mainMenuKeyboard(config));
-      return;
-    }
-    const data = ctx.callbackQuery?.data || '';
-    if (!['main_home', 'main_test', 'main_buy', 'main_wallet', 'main_account', 'main_support'].includes(data)) return next();
-    await ctx.answerCbQuery().catch(() => {});
-    await persistUser(ctx);
-    if (data === 'main_home') {
-      const config = await getConfig();
-      return ctx.reply(await getMessage('start'), mainMenuKeyboard(config));
-    }
-    if (data === 'main_test' || data === 'main_buy') {
-      const config = await getConfig();
-      const mode = data === 'main_test' ? 'test' : 'buy';
-      const titleKey = mode === 'test' ? 'serviceSelectionTest' : 'serviceSelectionBuy';
-      const prefix = mode === 'test' ? 'service_test_' : 'service_buy_';
-      const buttons = serviceButtons(prefix, config, mode);
-      if (!buttons.length) return ctx.reply(await getMessage('serviceUnavailable'));
-      return ctx.reply(await getMessage(titleKey), Markup.inlineKeyboard(withHome(buttons)));
-    }
-    if (data === 'main_wallet') {
-      const balance = await require('./wallet').getBalance(ctx.from.id);
-      await require('./storage').setState('user', ctx.from.id, { stage: 'AWAITING_WALLET_AMOUNT', orderId: null, requiredAmount: 0, balance });
-      return ctx.reply(`💰 <b>کیف پول من</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\n\nمبلغی که می‌خواهید کیف پول را شارژ کنید به تومان وارد کنید.`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: withHome([]) } });
-    }
-    if (data === 'main_account') {
-      const subscriptions = await accountService.listSubscriptions(ctx.from.id);
-      const list = subscriptions.map(accountService.summary);
-      if (!list.length) return ctx.reply(await getMessage('accountNoSubscription'));
-      return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:', { parse_mode: 'HTML', reply_markup: { inline_keyboard: withHome(accountUI.subscriptionKeyboard(list)) } });
-    }
-    if (data === 'main_support') {
-      const config = await getConfig();
-      const username = config.payment?.supportUsername || process.env.SUPPORT_USERNAME || 'Your_Personal_ID';
-      return ctx.reply(await getMessage('support', { support_username: username }));
-    }
-  });
+  originalUse.call(bot, (ctx, next) => handle(ctx, next, deps));
 }
 
-module.exports = { buttonStyleForCallback, styledButton, homeButton, mainMenuKeyboard, withHome, decorateReplyOptions, install };
+module.exports = { buttonStyleForCallback, styledButton, homeButton, mainMenuKeyboard, withHome, decorateReplyOptions, patchReply, handle, install };
