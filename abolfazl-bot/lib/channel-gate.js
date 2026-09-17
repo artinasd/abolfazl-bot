@@ -19,7 +19,7 @@ function isJoined(member) {
 }
 
 function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
-  ui.install(bot, { getConfig, getMessage, isAdmin, persistUser: async () => {} });
+  ui.patchReply();
 
   const adminMessaging = adminMessagingMiddleware({
     storage: require('./storage'),
@@ -68,7 +68,13 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
 
     const config = await getConfig();
     const gate = config.channelGate || {};
-    if (!gate.enabled || !normalizeUsername(gate.channelUsername)) return next();
+    if (!gate.enabled || !normalizeUsername(gate.channelUsername)) {
+      return ui.handle(ctx, next, {
+        getConfig,
+        getMessage,
+        persistUser: async (context) => require('./storage').saveUser({ telegramUserId: context.from.id, username: context.from.username || null, firstName: context.from.first_name || null, lastName: context.from.last_name || null, updatedAt: new Date().toISOString() }),
+      });
+    }
 
     const isCheck = ctx.callbackQuery?.data === 'channel_gate_check';
     if (isCheck) {
@@ -85,12 +91,17 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
     }
 
     const result = await check(ctx.from.id, ctx.from.username || '');
-    if (result.joined) return next();
-
-    if (ctx.callbackQuery) {
-      await ctx.answerCbQuery('ابتدا باید در کانال عضو شوید.').catch(() => {});
+    if (!result.joined) {
+      if (ctx.callbackQuery) await ctx.answerCbQuery('ابتدا باید در کانال عضو شوید.').catch(() => {});
+      await sendGate(ctx, config);
+      return;
     }
-    await sendGate(ctx, config);
+
+    return ui.handle(ctx, next, {
+      getConfig,
+      getMessage,
+      persistUser: async (context) => require('./storage').saveUser({ telegramUserId: context.from.id, username: context.from.username || null, firstName: context.from.first_name || null, lastName: context.from.last_name || null, updatedAt: new Date().toISOString() }),
+    });
   };
 }
 
