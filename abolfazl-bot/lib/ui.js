@@ -5,9 +5,9 @@ const { serviceButtons } = require('./services');
 
 function buttonStyleForCallback(callbackData) {
   const data = String(callbackData || '');
-  if (data === 'main_test' || data.startsWith('service_test_') || data.startsWith('test_') || data === 'channel_gate_check' || data.startsWith('account_renew:') || data.startsWith('renew_')) return 'success';
+  if (data === 'main_test' || data.startsWith('service_test_') || data.startsWith('test_') || data === 'channel_gate_check' || data.startsWith('account_renew:') || data.startsWith('renew_') || data.startsWith('approve_') || data.startsWith('wallet_approve_')) return 'success';
   if (data === 'main_buy' || data === 'main_wallet' || data === 'main_account' || data === 'main_support' || data === 'main_home' || data.startsWith('service_buy_') || data.startsWith('service_renew_') || data.startsWith('wallet_') || data.startsWith('payment_') || data.startsWith('back_') || data.startsWith('menu_') || data.startsWith('account_') || data.startsWith('copy_sub:') || data.startsWith('auto_name_') || data.startsWith('select_plan_')) return 'primary';
-  if (data.startsWith('disable_') || data.startsWith('cancel_') || data.startsWith('delete_') || data.startsWith('danger_')) return 'danger';
+  if (data.startsWith('disable_') || data.startsWith('cancel_') || data.startsWith('delete_') || data.startsWith('danger_') || data.startsWith('invalidate_') || data.startsWith('reject_') || data.startsWith('wallet_reject_')) return 'danger';
   return null;
 }
 
