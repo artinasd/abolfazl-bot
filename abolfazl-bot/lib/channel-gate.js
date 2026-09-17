@@ -1,5 +1,6 @@
 const { Markup } = require('telegraf');
 const { adminMessagingMiddleware } = require('./admin-messaging');
+const ui = require('./ui');
 
 function normalizeUsername(value) {
   const raw = String(value || '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@+/, '');
@@ -18,6 +19,8 @@ function isJoined(member) {
 }
 
 function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
+  ui.install(bot, { getConfig, getMessage, isAdmin, persistUser: async () => {} });
+
   const adminMessaging = adminMessagingMiddleware({
     storage: require('./storage'),
     isAdmin,
@@ -53,23 +56,10 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
     const checkText = String(gate.checkButton || '✅ بررسی عضویت');
     return ctx.reply(text, {
       reply_markup: Markup.inlineKeyboard([
-        [Markup.button.url(joinText, joinUrl(channel))],
-        [Markup.button.callback(checkText, 'channel_gate_check')],
+        [{ text: joinText, url: joinUrl(channel), style: 'primary' }],
+        [{ text: checkText, callback_data: 'channel_gate_check', style: 'success' }],
       ]).reply_markup,
     });
-  }
-
-  async function sendMainMenu(ctx) {
-    const config = await getConfig();
-    const b = config.buttons || {};
-    const message = await getMessage('start');
-    return ctx.reply(message, Markup.keyboard([
-      [b.test || '🎁 دریافت اکانت تست'],
-      [b.buy || '🛒 خرید اشتراک'],
-      [b.wallet || '💰 کیف پول من'],
-      [b.account || '👤 حساب من'],
-      [b.support || '🎯 پشتیبانی'],
-    ]).resize());
   }
 
   return async function channelGateMiddleware(ctx, next) {
@@ -85,7 +75,8 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
       const result = await check(ctx.from.id, ctx.from.username || '');
       if (result.joined) {
         await ctx.answerCbQuery('عضویت شما تأیید شد ✅').catch(() => {});
-        await sendMainMenu(ctx);
+        const uiConfig = await getConfig();
+        await ctx.reply(await getMessage('start'), ui.mainMenuKeyboard(uiConfig));
       } else {
         await ctx.answerCbQuery('هنوز عضویت شما تأیید نشد. ابتدا وارد کانال شوید.').catch(() => {});
         await sendGate(ctx, config);
