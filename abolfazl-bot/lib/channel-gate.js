@@ -19,8 +19,6 @@ function isJoined(member) {
 }
 
 function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
-  ui.patchReply();
-
   const adminMessaging = adminMessagingMiddleware({
     storage: require('./storage'),
     isAdmin,
@@ -63,6 +61,10 @@ function createGate(bot, { getConfig, getMessage, isAdmin, log }) {
   }
 
   return async function channelGateMiddleware(ctx, next) {
+    // Telegraf 4.x keeps reply on the per-update context, not Telegraf.prototype.
+    // Decorate it here so every downstream user-facing ctx.reply gets the shared UI rules.
+    ui.decorateContext(ctx);
+
     if (!ctx.from) return next();
     if (isAdmin(ctx)) return adminMessaging(ctx, next);
 
