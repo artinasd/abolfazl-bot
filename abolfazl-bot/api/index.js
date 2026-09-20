@@ -33,6 +33,12 @@ function escapeHtml(value) {
 function isAdmin(ctx) { return String(ctx.from?.id) === ADMIN_ID; }
 function log(event, fields = {}) { console.log(JSON.stringify({ event, ...fields })); }
 function userSnapshot(ctx) { return { telegramUserId: ctx.from.id, username: ctx.from.username || null, firstName: ctx.from.first_name || null, lastName: ctx.from.last_name || null, updatedAt: new Date().toISOString() }; }
+function generateRandomSubscriptionName() {
+  const adjectives = ['Nova', 'Pixel', 'Cloud', 'Orbit', 'Rapid', 'Silver', 'Blue', 'Prime', 'Turbo', 'Shadow'];
+  const nouns = ['Fox', 'Wave', 'Star', 'Link', 'Core', 'Net', 'Moon', 'Byte', 'Flow', 'Node'];
+  const pick = (items) => items[Math.floor(Math.random() * items.length)];
+  return `${pick(adjectives)}${pick(nouns)}${Math.floor(1000 + Math.random() * 9000)}`;
+}
 async function persistUser(ctx) { return storage.saveUser(userSnapshot(ctx)); }
 
 async function createOrderForPlan(ctx, plan) {
@@ -174,6 +180,7 @@ bot.on('callback_query',async(ctx)=>{
   if(data.startsWith('select_plan_')){const plan=await planStore.get(data.slice('select_plan_'.length));if(!plan)return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');const config=await getConfig();const service=getConfiguredService(plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await askSubscriptionName(ctx,order);return;}
   if(data.startsWith('select_custom_')){const serviceId=data.slice('select_custom_'.length);const config=await getConfig();const service=getConfiguredService(serviceId,config);if(!service)return ctx.reply(await getMessage('invalidService'));if(service.id!=='tunnel')return ctx.reply(await getMessage('serviceUnavailable',{service_name:serviceLabel(service)}));await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_TRAFFIC',service:serviceId});return ctx.reply('🛠 حجم مورد نیاز را فقط به صورت عدد و بر حسب گیگابایت وارد کنید.\n\nمثلاً: 15');}
   if(data==='select_custom'){await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_TRAFFIC',service:'tunnel'});return ctx.reply('🛠 حجم مورد نیاز را فقط به صورت عدد و بر حسب گیگابایت وارد کنید.\n\nمثلاً: 15');}
+  if(data.startsWith('random_name_')){const id=data.slice('random_name_'.length);const state=await storage.getState('user',ctx.from.id);if(!state||state.orderId!==id||state.stage!=='AWAITING_SUBSCRIPTION_NAME')return;const order=await storage.getOrder(id);if(!order||order.telegramUserId!==ctx.from.id)return;const generated=generateRandomSubscriptionName();const updated=await storage.updateOrder(id,{requestedName:generated});await ctx.reply(`✅ نام تصادفی انتخاب شد: <code>${escapeHtml(generated)}</code>\n\n⏳ در حال ادامه خرید...`,{parse_mode:'HTML'});return showWalletCheckout(ctx,updated);}
   if(data.startsWith('auto_name_')){const id=data.slice('auto_name_'.length);const state=await storage.getState('user',ctx.from.id);if(!state||state.orderId!==id||state.stage!=='AWAITING_SUBSCRIPTION_NAME')return;const order=await storage.getOrder(id);if(!order||order.telegramUserId!==ctx.from.id)return;await storage.updateOrder(id,{requestedName:null});return showWalletCheckout(ctx,{...order,requestedName:null});}
   if(data==='renew_choose'){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendServiceMenu(ctx,'renew');}
   if(data.startsWith('renew_plan_')){const plan=await planStore.get(data.slice('renew_plan_'.length));const user=await storage.getUser(ctx.from.id);if(!plan||!user?.currentPasarguardUserId)return ctx.reply('❌ این پلن فعال نیست یا اشتراک شما پیدا نشد.');const config=await getConfig();const service=getConfiguredService(plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await storage.updateOrder(order.orderId,{renewal:true,renewalPasarguardUserId:user.currentPasarguardUserId});return showWalletCheckout(ctx,order);}
