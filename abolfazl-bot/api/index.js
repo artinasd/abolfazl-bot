@@ -128,13 +128,23 @@ async function sendServiceMenu(ctx, mode = 'buy') {
 }
 
 async function sendPlanMenu(ctx, mode = 'buy', serviceId = 'tunnel') {
-  const config = await getConfig();
-  const service = getConfiguredService(serviceId, config);
-  if (!service) return ctx.reply(await getMessage('invalidService'));
-  const plans = await planStore.listActiveByService(service.id);
-  const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
-  if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
-  await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${serviceLabel(service)}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));
+  const diagnostic = { mode, service_id: String(serviceId), telegram_user_id: ctx.from?.id };
+  log('PLAN_MENU_START', diagnostic);
+  try {
+    const config = await getConfig();
+    const service = getConfiguredService(serviceId, config);
+    log('PLAN_MENU_SERVICE', { ...diagnostic, found: Boolean(service), service_name: service?.name || null });
+    if (!service) return ctx.reply(await getMessage('invalidService'));
+    const plans = await planStore.listActiveByService(service.id);
+    log('PLAN_MENU_PLANS', { ...diagnostic, count: plans.length, plan_ids: plans.map((plan) => plan.id) });
+    const buttons = plans.map((plan) => [Markup.button.callback(`${plan.buttonText || plan.name} - ${Number(plan.price).toLocaleString('en-US')} ${config.payment?.currency || plan.currency || 'تومان'}`, `${mode === 'renew' ? 'renew_plan_' : 'select_plan_'}${plan.id}`)]);
+    if (!buttons.length) return ctx.reply(await getMessage('noPlans', { service_name: serviceLabel(service) }));
+    await ctx.reply(`${mode === 'renew' ? '🔄' : '📋'} ${serviceLabel(service)}\n\n${await getMessage('planPrompt')}`, Markup.inlineKeyboard(buttons));
+    log('PLAN_MENU_SENT', diagnostic);
+  } catch (error) {
+    log('PLAN_MENU_ERROR', { ...diagnostic, error: error?.message || String(error), stack: error?.stack || null });
+    throw error;
+  }
 }
 
 async function createTestForService(ctx, serviceId) {
@@ -153,7 +163,7 @@ async function showWalletPage(ctx) {
   return ctx.reply(`💰 <b>کیف پول من</b>\n\nموجودی فعلی: <b>${balance.toLocaleString('en-US')} تومان</b>\n\nمبلغی که می‌خواهید کیف پول را شارژ کنید به تومان وارد کنید.\n\nپس از ارسال رسید و تأیید مدیر، مبلغ به موجودی شما اضافه می‌شود.`, { parse_mode: 'HTML' });
 }
 
-bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error)});});
+bot.catch((error,ctx)=>{log('BOT_ERROR',{update_type:ctx?.updateType,error:error?.message||String(error),stack:error?.stack||null});});
 bot.use(async(ctx,next)=>{if(isAdmin(ctx))return next();const config=await getConfig();if(config.bot?.maintenanceMode)return ctx.reply(await getMessage('maintenance'));return next();});
 bot.start(async(ctx)=>{await persistUser(ctx);await storage.deleteState('user',ctx.from.id);const config=await getConfig();const b=config.buttons||{};const testText=b.test||'🎁 دریافت اکانت تست';const buyText=b.buy||'🛒 خرید اشتراک';const accountText=b.account||'👤 حساب من';const walletText=b.wallet||'💰 کیف پول من';const supportText=b.support||'🎯 پشتیبانی';const message=await getMessage('start');await ctx.reply(message,Markup.keyboard([[testText],[buyText],[walletText],[accountText],[supportText]]).resize());});
 bot.hears(/.*/,async(ctx,next)=>{const config=await getConfig();const b=config.buttons||{};const text=ctx.message?.text;if(text===(b.support||'🎯 پشتیبانی')){await persistUser(ctx);const username=config.payment.supportUsername||SUPPORT_USERNAME;return ctx.reply(await getMessage('support',{support_username:username}));}if(text===(b.buy||'🛒 خرید اشتراک')){await persistUser(ctx);return sendServiceMenu(ctx,'buy');}if(text===(b.test||'🎁 دریافت اکانت تست')){return sendServiceMenu(ctx,'test');}if(text===(b.wallet||'💰 کیف پول من')){await persistUser(ctx);return showWalletPage(ctx);}if(text===(b.account||'👤 حساب من')){await persistUser(ctx);const subscriptions=await accountUI.listForUser(ctx.from.id);if(!subscriptions.length)return ctx.reply(await getMessage('accountNoSubscription'));return ctx.reply('👤 <b>حساب من</b>\n\nاشتراک موردنظر را انتخاب کنید:',{parse_mode:'HTML',reply_markup:{inline_keyboard:accountUI.subscriptionKeyboard(subscriptions)}});}return next();});
@@ -170,7 +180,7 @@ bot.on('callback_query',async(ctx)=>{
   if(data.startsWith('copy_sub:')){const id=data.slice('copy_sub:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);const url=raw?.subUrl||raw?.subscriptionUrl;if(!url)return ctx.reply('❌ لینک اشتراک در دسترس نیست.');return ctx.reply('📋 لینک اشتراک:',{reply_markup:{inline_keyboard:[[{text:'📋 کپی لینک اشتراک',copy_text:{text:url}}],[{text:'⬅️ بازگشت',callback_data:`account_sub:${id}`}]]}});}
   if(data.startsWith('account_renew:')){const id=data.slice('account_renew:'.length);const raw=await accountService.getSubscription(ctx.from.id,id);if(!raw||!accountService.canRenew(raw))return ctx.reply('❌ این اشتراک قابل تمدید نیست.');try{const order=await createRenewalOrderForSubscription(ctx,raw);return showWalletCheckout(ctx,order);}catch(error){log('ACCOUNT_RENEWAL_CREATE_FAILED',{telegram_user_id:ctx.from.id,source_order_id:id,error:error?.message||String(error)});return ctx.reply('❌ تمدید این اشتراک در حال حاضر ممکن نیست.');}}
   if(data.startsWith('service_test_'))return createTestForService(ctx,data.slice('service_test_'.length));
-  if(data.startsWith('service_buy_'))return sendPlanMenu(ctx,'buy',data.slice('service_buy_'.length));
+  if(data.startsWith('service_buy_')){const serviceId=data.slice('service_buy_'.length);log('SERVICE_BUY_CALLBACK',{service_id:serviceId,telegram_user_id:ctx.from?.id});return sendPlanMenu(ctx,'buy',serviceId);}
   if(data.startsWith('service_renew_')){const user=await storage.getUser(ctx.from.id);if(!user?.currentPasarguardUserId)return ctx.reply('❌ اشتراک فعالی برای تمدید پیدا نشد.');return sendPlanMenu(ctx,'renew',data.slice('service_renew_'.length));}
   if(data.startsWith('select_plan_')){const plan=await planStore.get(data.slice('select_plan_'.length));if(!plan)return ctx.reply('❌ این پلن دیگر فعال نیست. لطفاً فهرست پلن‌ها را دوباره باز کنید.');const config=await getConfig();const service=getConfiguredService(plan.service,config);if(!service)return ctx.reply(await getMessage('invalidService'));const order=await createOrderForPlan(ctx,plan);await askSubscriptionName(ctx,order);return;}
   if(data.startsWith('select_custom_')){const serviceId=data.slice('select_custom_'.length);const config=await getConfig();const service=getConfiguredService(serviceId,config);if(!service)return ctx.reply(await getMessage('invalidService'));if(service.id!=='tunnel')return ctx.reply(await getMessage('serviceUnavailable',{service_name:serviceLabel(service)}));await storage.setState('user',ctx.from.id,{stage:'AWAITING_CUSTOM_TRAFFIC',service:serviceId});return ctx.reply('🛠 حجم مورد نیاز را فقط به صورت عدد و بر حسب گیگابایت وارد کنید.\n\nمثلاً: 15');}
