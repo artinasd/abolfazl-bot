@@ -73,7 +73,7 @@ function normalize(config) {
 async function getConfig() { return normalize(await storage.get(KEY)); }
 async function saveConfig(patch) { const next = normalize(await storage.get(KEY)); const merged = normalize(merge(next, patch || {})); await storage.set(KEY, merged); return merged; }
 async function getSetting(path, fallback) { const config = await getConfig(); const value = String(path || '').split('.').filter(Boolean).reduce((current, key) => current == null ? undefined : current[key], config); return value === undefined ? fallback : value; }
-async function getMessage(key, variables = {}) { const config = await getConfig(); let message = config.messages?.[key]; if (message == null) message = DEFAULTS.messages[key] || ''; return String(message).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, name) => String(variables[name] ?? `{${name}}`)); }
+async function getMessage(key, variables = {}) { const config = await getConfig(); let message = config.messages?.[key]; if (message == null || String(message).trim() === '') message = DEFAULTS.messages[key] || 'Please try again later.'; return String(message).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, name) => String(variables[name] ?? `{${name}}`)); }
 async function getButton(key, fallback = '') { const config = await getConfig(); return String(config.buttons?.[key] ?? DEFAULTS.buttons[key] ?? fallback); }
 
 if (!Telegraf.prototype.__channelGatePatched) {
